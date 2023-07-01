@@ -7,46 +7,46 @@
 with lib; let
   cfg = config.plugins.mark-radar;
   helpers = import ../helpers.nix {inherit lib;};
-  defs = import ../plugin-defs.nix {inherit pkgs;};
 in {
-  options.plugins.mark-radar = {
-    enable = mkEnableOption "mark-radar";
+  options.plugins.mark-radar =
+    helpers.extraOptionsOptions
+    // {
+      enable = mkEnableOption "mark-radar";
 
-    package = helpers.mkPackageOption "mark-radar" defs.mark-radar;
+      package = helpers.mkPackageOption "mark-radar" pkgs.vimPlugins.mark-radar-nvim;
 
-    highlight_background = mkOption {
-      type = with types; nullOr bool;
-      default = null;
+      setDefaultMappings =
+        helpers.defaultNullOpts.mkBool true
+        "Whether to set default mappings.";
+
+      highlightGroup =
+        helpers.defaultNullOpts.mkStr "RadarMark"
+        "The name of the highlight group to use.";
+
+      backgroundHighlight =
+        helpers.defaultNullOpts.mkBool true
+        "Whether to highlight the background.";
+
+      backgroundHighlightGroup =
+        helpers.defaultNullOpts.mkStr "RadarBackground"
+        "The name of the highlight group to use for the background.";
     };
-
-    background_highlight_group = mkOption {
-      type = with types; nullOr str;
-      default = null;
-    };
-
-    highlight_group = mkOption {
-      type = with types; nullOr str;
-      default = null;
-    };
-
-    set_default_keybinds = mkOption {
-      type = with types; nullOr str;
-      default = null;
-    };
-  };
 
   config = let
-    opts = helpers.toLuaObject {
-      inherit (cfg) highlight_group background_highlight_group;
-      set_default_mappings = cfg.set_default_keybinds;
-      background_highlight = cfg.highlight_background;
-    };
+    setupOptions =
+      {
+        set_default_mappings = cfg.setDefaultMappings;
+        highlight_group = cfg.highlightGroup;
+        background_highlight = cfg.backgroundHighlight;
+        background_highlight_group = cfg.backgroundHighlightGroup;
+      }
+      // cfg.extraOptions;
   in
     mkIf cfg.enable {
       extraPlugins = [cfg.package];
 
       extraConfigLua = ''
-        require("mark-radar").setup(${opts})
+        require("mark-radar").setup(${helpers.toLuaObject setupOptions})
       '';
     };
 }

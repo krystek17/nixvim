@@ -27,7 +27,7 @@ in {
       description = "Default timeout for notifications";
       default = null;
     };
-    backgroundColor = mkOption {
+    backgroundColour = mkOption {
       type = types.nullOr types.str;
       description = "For stages that change opacity this is treated as the highlight between the window";
       default = null;
@@ -54,9 +54,8 @@ in {
 
   config = let
     setupOptions = with cfg; {
-      stages = stages;
-      timeout = timeout;
-      background_color = backgroundColor;
+      inherit stages timeout;
+      background_colour = backgroundColour;
       minimum_width = minimumWidth;
       icons = with icons; {
         ERROR = error;

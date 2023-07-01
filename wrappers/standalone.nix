@@ -6,8 +6,22 @@ default_pkgs: modules: {
 
   wrap = {wrapRc = true;};
 
-  eval = lib.evalModules {
-    modules = (modules pkgs) ++ [module wrap];
+  shared = import ./_shared.nix modules {
+    inherit pkgs lib;
+    config = {};
   };
+
+  eval = lib.evalModules {
+    modules = [module wrap] ++ shared.topLevelModules;
+  };
+
+  handleAssertions = config: let
+    failedAssertions = map (x: x.message) (lib.filter (x: !x.assertion) config.assertions);
+  in
+    if failedAssertions != []
+    then throw "\nFailed assertions:\n${builtins.concatStringsSep "\n" (map (x: "- ${x}") failedAssertions)}"
+    else lib.showWarnings config.warnings config;
+
+  config = handleAssertions eval.config;
 in
-  eval.config.finalPackage
+  config.finalPackage

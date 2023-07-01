@@ -26,6 +26,12 @@ gruvbox as the colorscheme, no extra configuration required!
 If you have any question, please use the [discussions page](https://github.com/pta2002/nixvim/discussions/categories/q-a)! Alternatively, join the Matrix channel at [#nixvim:matrix.org](https://matrix.to/#/#nixvim:matrix.org)!
 
 ## Installation
+
+NixVim needs to be installed with a compatible nixpkgs version.
+This means that the `main` branch of NixVim requires to be insalled with `nixos-unstable`.
+
+If you want to use NixVim with nixpkgs 23.05 you should use the `nixos-23.05` branch.
+
 ### Without flakes
 NixVim now ships with `flake-compat`, which makes it usable from any system.
 
@@ -82,8 +88,8 @@ for a home-manager installation, `inputs.nixvim.nixosModules.nixvim`, for NixOS,
 and `inputs.nixvim.nixDarwinModules.nixvim` for nix-darwin.
 
 ## Usage
-NixVim can be used in four ways: through the home-manager, nix-darwin, and NixOS modules,
-and through the `makeNixvim` function. To use the modules, just import the
+NixVim can be used in four ways: through the home-manager, nix-darwin, NixOS modules,
+and standalone through the `makeNixvim` function. To use the modules, just import the
 `nixvim.homeManagerModules.nixvim`, `nixvim.nixDarwinModules.nixvim`, and
 `nixvim.nixosModules.nixvim` modules, depending on which system
 you're using.
@@ -100,8 +106,17 @@ If you want to use it standalone, you can use the `makeNixvim` function:
 }
 ```
 
+To get started with a standalone configuration you can use the template by running the following command in an empty directory (recommended):
+
+```
+nix flake init --template github:pta2002/nixvim
+```
+
 Alternatively if you want a minimal flake to allow building a custom neovim you
 can use the following:
+
+<details>
+  <summary>Minimal flake configuration</summary>
 
 ```nix
 {
@@ -131,9 +146,29 @@ can use the following:
     });
 }
 ```
+</details>
 
 You can then run neovim using `nix run .# -- <file>`. This can be useful to test
 config changes easily.
+
+### With a `devShell`
+
+You can also use nixvim to define an instance which will only be available inside of a Nix `devShell`:
+
+<details>
+  <summary>devShell configuration</summary>
+
+```nix
+let
+  nvim = nixvim.legacyPackages.x86_64-linux.makeNixvim {
+    plugins.lsp.enable = true;
+  };
+in pkgs.mkShell {
+  buildInputs = [nvim];
+};
+```
+
+</details>
 
 ### Advanced Usage
 
@@ -252,6 +287,20 @@ All of these are configurable from within NixVim. All you have to do is set the
 Please note that to, for example, disable numbers you would not set
 `options.nonumber` to true, you'd set `options.number` to false.
 
+### Caveats
+
+If you are using `makeNixvimWithModule`, then options is treated as options for a module. To get around this just wrap the options in a `config` set.
+
+```nix
+{
+  config = {
+    options = {
+      # ...
+    };
+  };
+}
+```
+
 ## Key mappings
 It is fully possible to define key mappings from within NixVim. This is done
 using the `maps` attribute:
@@ -318,7 +367,7 @@ leader key. This is easy with the `globals` attribute:
 }
 ```
 
-## Aditional config
+## Additional config
 Sometimes NixVim won't be able to provide for all your customization needs.
 In these cases, the `extraConfigVim` and `extraConfigLua` options are
 provided:
@@ -336,3 +385,7 @@ provided:
 
 If you feel like what you are doing manually should be supported in NixVim,
 please open an issue.
+
+# Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)

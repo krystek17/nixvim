@@ -3,7 +3,7 @@ with lib; rec {
   # vim dictionaries are, in theory, compatible with JSON
   toVimDict = args:
     toJSON
-    (lib.filterAttrs (n: v: !isNull v) args);
+    (lib.filterAttrs (n: v: v != null) args);
 
   # Black functional magic that converts a bunch of different Nix types to their
   # lua equivalents!
@@ -12,6 +12,8 @@ with lib; rec {
     then
       if hasAttr "__raw" args
       then args.__raw
+      else if hasAttr "__empty" args
+      then "{ }"
       else
         "{"
         + (concatStringsSep ","
@@ -20,7 +22,12 @@ with lib; rec {
               if head (stringToCharacters n) == "@"
               then toLuaObject v
               else "[${toLuaObject n}] = " + (toLuaObject v))
-            (filterAttrs (n: v: !isNull v && toLuaObject v != "{}") args)))
+            (filterAttrs
+              (
+                n: v:
+                  v != null && (toLuaObject v != "{}")
+              )
+              args)))
         + "}"
     else if builtins.isList args
     then "{" + concatMapStringsSep "," toLuaObject args + "}"
@@ -36,44 +43,57 @@ with lib; rec {
     then "${toString args}"
     else if builtins.isInt args
     then "${toString args}"
-    else if isNull args
+    else if (args == null)
     then "nil"
     else "";
 
-  # Generates maps for a lua config
-  genMaps = mode: maps: let
-    normalized =
-      builtins.mapAttrs
-      (key: action:
-        if builtins.isString action
-        then {
-          silent = false;
-          expr = false;
-          unique = false;
-          noremap = true;
-          script = false;
-          nowait = false;
-          action = action;
-        }
-        else {
-          inherit (action) silent expr unique noremap script nowait;
-          action =
-            if action.lua
-            then mkRaw action.action
-            else action;
-        })
-      maps;
-  in
-    builtins.attrValues (builtins.mapAttrs
-      (key: action: {
-        action = action.action;
-        config = lib.filterAttrs (_: v: v) {
-          inherit (action) silent expr unique noremap script nowait;
-        };
-        key = key;
-        mode = mode;
-      })
-      normalized);
+  emptyTable = {"__empty" = null;};
+
+  # Given an attrs of key mappings (for a single mode), applies the defaults to each one of them.
+  #
+  # Example:
+  # mkModeMaps { silent = true; } {
+  #   Y = "y$";
+  #   "<C-c>" = { action = ":b#<CR>"; silent = false; };
+  # };
+  #
+  # would give:
+  # {
+  #   Y = {
+  #     action = "y$";
+  #     silent = true;
+  #   };
+  #   "<C-c>" = {
+  #     action = ":b#<CR>";
+  #     silent = false;
+  #   };
+  # };
+  mkModeMaps = defaults:
+    mapAttrs
+    (
+      shortcut: action: let
+        actionAttrs =
+          if isString action
+          then {inherit action;}
+          else action;
+      in
+        defaults // actionAttrs
+    );
+
+  # Applies some default mapping options to a set of mappings
+  #
+  # Example:
+  #   maps = mkMaps { silent = true; expr = true; } {
+  #     normal = {
+  #       ...
+  #     };
+  #     visual = {
+  #       ...
+  #     };
+  #   }
+  mkMaps = defaults:
+    mapAttrs
+    (name: modeMaps: (mkModeMaps defaults modeMaps));
 
   # Creates an option with a nullable type that defaults to null.
   mkNullOrOption = type: desc:
@@ -83,7 +103,19 @@ with lib; rec {
       description = desc;
     };
 
-  mkIfNonNull = c: mkIf (!isNull c) c;
+  mkIfNonNull' = x: y: (mkIf (x != null) y);
+
+  mkIfNonNull = x: (mkIfNonNull' x x);
+
+  ifNonNull' = x: y:
+    if (x == null)
+    then null
+    else y;
+
+  ifNonNull = x: ifNonNull' x x;
+
+  mkCompositeOption = desc: options:
+    mkNullOrOption (types.submodule {inherit options;}) desc;
 
   defaultNullOpts = rec {
     mkNullable = type: default: desc:
@@ -100,6 +132,7 @@ with lib; rec {
           ''
       );
 
+    mkNum = default: mkNullable lib.types.number (toString default);
     mkInt = default: mkNullable lib.types.int (toString default);
     mkBool = default:
       mkNullable lib.types.bool (
@@ -110,6 +143,29 @@ with lib; rec {
     mkStr = default: mkNullable lib.types.str ''${builtins.toString default}'';
     mkEnum = enum: default: mkNullable (lib.types.enum enum) ''"${default}"'';
     mkEnumFirstDefault = enum: mkEnum enum (head enum);
+    mkBorder = default: name: desc:
+      mkNullable
+      (
+        with lib.types;
+          oneOf [
+            str
+            (listOf str)
+            (listOf (listOf str))
+          ]
+      )
+      default
+      (let
+        defaultDesc = ''
+          Defines the border to use for ${name}.
+          Accepts same border values as `nvim_open_win()`. See `:help nvim_open_win()` for more info.
+        '';
+      in
+        if desc == ""
+        then defaultDesc
+        else ''
+          ${desc}
+          ${defaultDesc}
+        '');
   };
 
   mkPackageOption = name: default:
@@ -130,6 +186,7 @@ with lib; rec {
     extraPlugins ? [],
     extraPackages ? [],
     options ? {},
+    globalPrefix ? "",
     ...
   }: let
     cfg = config.plugins.${name};
@@ -138,7 +195,7 @@ with lib; rec {
     globals =
       mapAttrs'
       (name: opt: {
-        name = opt.global;
+        name = globalPrefix + opt.global;
         value =
           if cfg.${name} != null
           then opt.value cfg.${name}
@@ -171,7 +228,7 @@ with lib; rec {
     if builtins.isBool val
     then
       (
-        if val == false
+        if !val
         then 0
         else 1
       )
@@ -188,9 +245,7 @@ with lib; rec {
   }: {
     option = mkOption {
       type = types.nullOr type;
-      default = default;
-      description = description;
-      example = example;
+      inherit default description example;
     };
 
     inherit value global;

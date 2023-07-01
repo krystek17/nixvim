@@ -7,89 +7,68 @@
 with lib; let
   cfg = config.plugins.nvim-cmp;
   helpers = import ../../helpers.nix {inherit lib;};
-  mkNullOrOption = helpers.mkNullOrOption;
   cmpLib = import ./cmp-helpers.nix args;
-  # functionName should be a string
-  # parameters should be a list of strings
-  wrapWithFunction = functionName: parameters: let
-    parameterString = strings.concatStringsSep "," parameters;
-  in ''${functionName}(${parameterString})'';
+
+  snippetEngines = {
+    "vsnip" = ''vim.fn["vsnip#anonymous"](args.body)'';
+    "luasnip" = ''require('luasnip').lsp_expand(args.body)'';
+    "snippy" = ''require('snippy').expand_snippet(args.body)'';
+    "ultisnips" = ''vim.fn["UltiSnips#Anon"](args.body)'';
+  };
 in {
   options.plugins.nvim-cmp = {
     enable = mkEnableOption "nvim-cmp";
 
     package = helpers.mkPackageOption "nvim-cmp" pkgs.vimPlugins.nvim-cmp;
 
-    performance = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          debounce = mkOption {
-            type = types.nullOr types.int;
-            default = null;
-          };
-          throttle = mkOption {
-            type = types.nullOr types.int;
-            default = null;
-          };
-        };
-      }));
-    };
+    performance = {
+      debounce = helpers.defaultNullOpts.mkInt 60 ''
+        Sets debounce time
+        This is the interval used to group up completions from different sources
+        for filtering and displaying.
+      '';
 
-    preselect = mkOption {
-      type = types.nullOr (types.enum ["Item" "None"]);
-      default = null;
-      example = ''"Item"'';
-    };
+      throttle = helpers.defaultNullOpts.mkInt 30 ''
+        Sets throttle time.
+        This is used to delay filtering and displaying completions.
+      '';
 
-    snippet = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          expand = mkOption {
-            type = types.nullOr types.str;
-            example = ''
-              function(args)
-                vim.fn["vsnip#anonymous"](args.body) -- For `vsnip` users.
-                -- require('luasnip').lsp_expand(args.body) -- For `luasnip` users.
-                -- require('snippy').expand_snippet(args.body) -- For `snippy` users.
-                -- vim.fn["UltiSnips#Anon"](args.body) -- For `ultisnips` users.
-              end
-            '';
-          };
-        };
-      }));
-    };
+      fetchingTimeout = helpers.defaultNullOpts.mkInt 500 ''
+        Sets the timeout of candidate fetching process.
+        The nvim-cmp will wait to display the most prioritized source.
+      '';
 
-    mappingPresets = mkOption {
-      default = [];
-      type = types.listOf (types.enum [
-        "insert"
-        "cmdline"
-        # Not sure if there are more or if this should just be str
-      ]);
-      description = "Mapping presets to use; cmp.mapping.preset.\${mappingPreset} will be called with the configured mappings";
-      example = ''
-        [ "insert" "cmdline" ]
+      asyncBudget = helpers.defaultNullOpts.mkInt 1 ''
+        Maximum time (in ms) an async function is allowed to run during one step of the event loop.
+      '';
+
+      maxViewEntries = helpers.defaultNullOpts.mkInt 200 ''
+        Maximum number of items to show in the entries list.
       '';
     };
 
+    preselect = helpers.defaultNullOpts.mkEnumFirstDefault ["Item" "None"] ''
+      - "Item": nvim-cmp will preselect the item that the source specified.
+      - "None": nvim-cmp will not preselect any items.
+    '';
+
     mapping = mkOption {
       default = null;
-      type = types.nullOr (types.attrsOf (types.either types.str (types.submodule ({...}: {
-        options = {
-          action = mkOption {
-            type = types.nonEmptyStr;
-            description = "The function the mapping should call";
-            example = ''"cmp.mapping.scroll_docs(-4)"'';
+      type = with types;
+        nullOr (attrsOf (either str (types.submodule (_: {
+          options = {
+            action = mkOption {
+              type = types.nonEmptyStr;
+              description = "The function the mapping should call";
+              example = ''"cmp.mapping.scroll_docs(-4)"'';
+            };
+            modes = mkOption {
+              default = null;
+              type = types.nullOr (types.listOf types.str);
+              example = ''[ "i" "s" ]'';
+            };
           };
-          modes = mkOption {
-            default = null;
-            type = types.nullOr (types.listOf types.str);
-            example = ''[ "i" "s" ]'';
-          };
-        };
-      }))));
+        }))));
       example = ''
         {
           "<CR>" = "cmp.mapping.confirm({ select = true })";
@@ -115,103 +94,171 @@ in {
       '';
     };
 
-    completion = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          keyword_length = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
-
-          keyword_pattern = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-          };
-
-          autocomplete = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-            description = "Lua code for the event.";
-            example = ''"false"'';
-          };
-
-          completeopt = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-          };
-        };
-      }));
+    mappingPresets = mkOption {
+      default = [];
+      type = types.listOf (types.enum [
+        "insert"
+        "cmdline"
+      ]);
+      description = ''
+        Mapping presets to use; cmp.mapping.preset.
+        \$\{mappingPreset} will be called with the configured mappings.
+      '';
+      example = ''[ "insert" "cmdline" ]'';
     };
 
-    confirmation = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          get_commit_characters = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-            description = "Direct lua code as a string";
+    snippet = helpers.mkCompositeOption "Snippet options" {
+      expand =
+        helpers.mkNullOrOption
+        (
+          types.either
+          helpers.rawType
+          (types.enum (attrNames snippetEngines))
+        )
+        ''
+          The snippet expansion function. That's how nvim-cmp interacts with a
+          particular snippet engine.
+
+          You may directly provide one of those four supported engines:
+          - vsnip
+          - luasnip
+          - snippy
+          - ultisnips
+
+          You can also provide a custom function:
+          ```
+          {
+            __raw = \'\'
+              function(args)
+                vim.fn["vsnip#anonymous"](args.body) -- For `vsnip` users.
+                -- require('luasnip').lsp_expand(args.body) -- For `luasnip` users.
+                -- require('snippy').expand_snippet(args.body) -- For `snippy` users.
+                -- vim.fn["UltiSnips#Anon"](args.body) -- For `ultisnips` users.
+              end
+            \'\';
           };
-        };
-      }));
+          ```
+        '';
     };
 
-    formatting = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          fields = mkOption {
-            default = null;
-            type = types.nullOr (types.listOf types.str);
-            example = ''[ "kind" "abbr" "menu" ]'';
-          };
-          format = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-            description = "A lua function as a string";
-          };
-        };
-      }));
+    completion = helpers.mkCompositeOption "Completion options" {
+      keywordLength = helpers.defaultNullOpts.mkInt 1 ''
+        The number of characters needed to trigger auto-completion.
+      '';
+
+      keywordPattern =
+        helpers.defaultNullOpts.mkStr
+        ''\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%(-\w*\)*\)''
+        ''
+          The default keyword pattern.
+
+          Note: the provided pattern will be embedded as such: `[[PATTERN]]`.
+        '';
+
+      autocomplete =
+        helpers.defaultNullOpts.mkNullable
+        (
+          with types;
+            either
+            (listOf str)
+            (types.enum [false])
+        )
+        ''[ "TextChanged" ]''
+        ''
+          The event to trigger autocompletion.
+          If set to `"false"`, then completion is only invoked manually
+          (e.g. by calling `cmp.complete`).
+        '';
+
+      completeopt = helpers.defaultNullOpts.mkStr "menu,menuone,noselect" ''
+        Like vim's completeopt setting. In general, you don't need to change this.
+      '';
     };
 
-    matching = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          disallow_fuzzy_matching = mkOption {
-            default = null;
-            type = types.nullOr types.bool;
-          };
-          disallow_partial_matching = mkOption {
-            default = null;
-            type = types.nullOr types.bool;
-          };
-          disallow_prefix_unmatching = mkOption {
-            default = null;
-            type = types.nullOr types.bool;
-          };
-        };
-      }));
+    confirmation = helpers.mkCompositeOption "Confirmation options" {
+      getCommitCharacters =
+        helpers.defaultNullOpts.mkStr
+        ''
+          function(commit_characters)
+            return commit_characters
+          end
+        ''
+        ''
+          You can append or exclude commitCharacters via this configuration option
+          function. The commitCharacters are defined by the LSP spec.
+        '';
     };
 
-    sorting = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          priority_weight = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
-          comparators = mkOption {
-            default = null;
-            type = types.nullOr types.str;
-          };
-        };
-      }));
+    formatting = helpers.mkCompositeOption "Formatting options" {
+      expandableIndicator = helpers.defaultNullOpts.mkBool true ''
+        Boolean to show the `~` expandable indicator in cmp's floating window.
+      '';
+
+      fields =
+        helpers.defaultNullOpts.mkNullable
+        (types.listOf types.str)
+        ''[ "kind" "abbr" "menu" ]''
+        "An array of completion fields to specify their order.";
+
+      format =
+        helpers.defaultNullOpts.mkStr
+        ''
+          function(_, vim_item)
+            return vim_item
+          end
+        ''
+        ''
+          `fun(entry: cmp.Entry, vim_item: vim.CompletedItem): vim.CompletedItem`
+          The function used to customize the appearance of the completion menu. See
+          |complete-items|. This value can also be used to modify the `dup` property.
+          NOTE: The `vim.CompletedItem` can contain the special properties
+          `abbr_hl_group`, `kind_hl_group` and `menu_hl_group`.
+        '';
     };
 
-    auto_enable_sources = mkOption {
+    matching = helpers.mkCompositeOption "Matching options" {
+      disallowFuzzyMatching = helpers.defaultNullOpts.mkBool false ''
+        Whether to allow fuzzy matching.
+      '';
+
+      disallowFullfuzzyMatching = helpers.defaultNullOpts.mkBool false ''
+        Whether to allow full-fuzzy matching.
+      '';
+
+      disallowPartialFuzzyMatching = helpers.defaultNullOpts.mkBool true ''
+        Whether to allow fuzzy matching without prefix matching.
+      '';
+
+      disallowPartialMatching = helpers.defaultNullOpts.mkBool false ''
+        Whether to allow partial matching.
+      '';
+
+      disallowPrefixUnmatching = helpers.defaultNullOpts.mkBool false ''
+        Whether to allow prefix unmatching.
+      '';
+    };
+
+    sorting = helpers.mkCompositeOption "Sorting options" {
+      priorityWeight = helpers.defaultNullOpts.mkInt 2 ''
+        Each item's original priority (given by its corresponding source) will be
+        increased by `#sources - (source_index - 1)` and multiplied by `priority_weight`.
+        That is, the final priority is calculated by the following formula:
+
+        `final_score = orig_score + ((#sources - (source_index - 1)) * sorting.priority_weight)`
+      '';
+
+      comparators =
+        helpers.defaultNullOpts.mkNullable (types.listOf types.str)
+        ''[ "offset" "exact" "score" "recently_used" "locality" "kind" "length" "order" ]''
+        ''
+          The function to customize the sorting behavior.
+          You can use built-in comparators via `cmp.config.compare.*`.
+
+          Signature: `(fun(entry1: cmp.Entry, entry2: cmp.Entry): boolean | nil)[]`
+        '';
+    };
+
+    autoEnableSources = mkOption {
       type = types.bool;
       default = true;
       description = ''
@@ -220,7 +267,7 @@ in {
     };
 
     sources = let
-      source_config = types.submodule ({...}: {
+      source_config = types.submodule (_: {
         options = {
           name = mkOption {
             type = types.str;
@@ -228,51 +275,95 @@ in {
             example = ''"buffer"'';
           };
 
-          option = mkOption {
-            default = null;
-            type = with types; nullOr (attrsOf anything);
-            description = "If direct lua code is needed use helpers.mkRaw";
-          };
+          option = helpers.mkNullOrOption types.attrs ''
+            Any specific options defined by the source itself.
 
-          keyword_length = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
+            If direct lua code is needed use `helpers.mkRaw`.
+          '';
 
-          keyword_pattern = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
+          keywordLength = helpers.mkNullOrOption types.int ''
+            The source-specific keyword length to trigger auto completion.
+          '';
 
-          trigger_characters = mkOption {
-            default = null;
-            type = with types; nullOr (listOf str);
-          };
+          keywordPattern = helpers.mkNullOrOption types.str ''
+            The source-specific keyword pattern.
 
-          priority = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
+            Note: the provided pattern will be embedded as such: `[[PATTERN]]`.
+          '';
 
-          max_item_count = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
+          triggerCharacters = helpers.mkNullOrOption (types.listOf types.str) ''
+            A source-specific keyword pattern.
+          '';
 
-          group_index = mkOption {
-            default = null;
-            type = types.nullOr types.int;
-          };
+          priority = helpers.mkNullOrOption types.int "The source-specific priority value.";
+
+          groupIndex = helpers.mkNullOrOption types.int ''
+            The source group index.
+
+            For instance, you can set the `buffer`'s source `group_index` to a larger number
+            if you don't want to see `buffer` source items while `nvim-lsp` source is available:
+
+            ```
+            cmp.setup {
+              sources = {
+                { name = 'nvim_lsp', group_index = 1 },
+                { name = 'buffer', group_index = 2 },
+              }
+            }
+            ```
+
+            You can also achieve this by using the built-in configuration helper like this:
+            ```
+            cmp.setup {
+              sources = cmp.config.sources({
+                { name = 'nvim_lsp' },
+              }, {
+                { name = 'buffer' },
+              })
+            }
+            ```
+          '';
+
+          entryFilter = helpers.mkNullOrOption types.str ''
+            A source-specific entry filter, with the following function signature:
+
+            `function(entry: cmp.Entry, ctx: cmp.Context): boolean`
+
+            Returning `true` will keep the entry, while returning `false` will remove it.
+
+            This can be used to hide certain entries from a given source. For instance, you
+            could hide all entries with kind `Text` from the `nvim_lsp` filter using the
+            following source definition:
+
+            ```
+            {
+              name = 'nvim_lsp',
+              entry_filter = function(entry, ctx)
+                return require('cmp.types').lsp.CompletionItemKind[entry:get_kind()] ~= 'Text'
+              end
+            }
+            ```
+
+            Using the `ctx` parameter, you can further customize the behaviour of the source.
+          '';
         };
       });
     in
       mkOption {
         default = null;
-        type = with types; nullOr (either (listOf source_config) (listOf (listOf source_config)));
+        type = with types;
+          nullOr (
+            either
+            (listOf source_config)
+            (listOf (listOf source_config))
+          );
         description = ''
           The sources to use.
           Can either be a list of sourceConfigs which will be made directly to a Lua object.
-          Or it can be a list of lists, which will use the cmp built-in helper function `cmp.config.sources`.
+          Or it can be a list of lists, which will use the cmp built-in helper function
+          `cmp.config.sources`.
+
+          Default: [ ]
         '';
         example = ''
           [
@@ -284,65 +375,107 @@ in {
         '';
       };
 
-    view = mkOption {
-      default = null;
-      type = types.nullOr (types.submodule ({...}: {
-        options = {
-          entries = mkOption {
-            default = null;
-            type = with types; nullOr (either str attrs);
-          };
-        };
-      }));
+    view = helpers.mkCompositeOption "View options" {
+      entries =
+        helpers.defaultNullOpts.mkNullable (with types; either str attrs)
+        ''
+          {
+            name = "custom";
+            selection_order = "top_down";
+          }
+        ''
+        ''
+          The view class used to customize nvim-cmp's appearance.
+        '';
     };
 
     window = let
       # Reusable options
-      border = with types; mkNullOrOption (either str (listOf str)) null;
-      winhighlight = mkNullOrOption types.str null;
-      zindex = mkNullOrOption types.int null;
-    in
-      mkOption {
-        default = null;
-        type = types.nullOr (types.submodule ({...}: {
-          options = {
-            completion = mkOption {
-              default = null;
-              type = types.nullOr (types.submodule ({...}: {
-                options = {
-                  inherit border winhighlight zindex;
-                  col_offset = mkNullOrOption types.int "Offsets the completion window relative to the cursor";
-                  side_padding = mkNullOrOption types.int "The amount of padding to add on the completion window's sides";
-                };
-              }));
-            };
+      mkWinhighlightOption = default:
+        helpers.defaultNullOpts.mkStr
+        default
+        ''
+          Specify the window's winhighlight option.
+          See |nvim_open_win|.
+        '';
 
-            documentation = mkOption {
-              default = null;
-              type = types.nullOr (types.submodule ({...}: {
-                options = {
-                  inherit border winhighlight zindex;
-                  max_width = mkNullOrOption types.int "Window's max width";
-                  max_height = mkNullOrOption types.int "Window's max height";
-                };
-              }));
-            };
-          };
-        }));
+      zindex = helpers.mkNullOrOption types.int ''
+        The completion window's zindex.
+        See |nvim_open_win|.
+      '';
+    in
+      helpers.mkCompositeOption "Windows options" {
+        completion = helpers.mkCompositeOption "Completion window options" {
+          border = helpers.defaultNullOpts.mkBorder ''[ "" "" "" "" "" "" "" "" ]'' "nvim-cmp window" "";
+
+          winhighlight =
+            mkWinhighlightOption
+            "Normal:Pmenu,FloatBorder:Pmenu,CursorLine:PmenuSel,Search:None";
+
+          inherit zindex;
+
+          scrolloff = helpers.defaultNullOpts.mkInt 0 ''
+            Specify the window's scrolloff option.
+            See |'scrolloff'|.
+          '';
+
+          colOffset = helpers.defaultNullOpts.mkInt 0 ''
+            Offsets the completion window relative to the cursor.
+          '';
+
+          sidePadding = helpers.defaultNullOpts.mkInt 1 ''
+            The amount of padding to add on the completion window's sides.
+          '';
+
+          scrollbar = helpers.defaultNullOpts.mkBool true ''
+            Whether the scrollbar should be enabled if there are more items that fit
+          '';
+        };
+
+        documentation = helpers.mkCompositeOption "Documentation window options" {
+          border = helpers.defaultNullOpts.mkBorder ''[ "" "" "" " " "" "" "" " " ]'' "nvim-cmp documentation window" "";
+
+          winhighlight = mkWinhighlightOption "FloatBorder:NormalFloat";
+
+          inherit zindex;
+
+          maxWidth =
+            helpers.defaultNullOpts.mkNullable
+            (types.either types.int types.str)
+            "math.floor((40 * 2) * (vim.o.columns / (40 * 2 * 16 / 9)))"
+            "The documentation window's max width.";
+
+          maxHeight =
+            helpers.defaultNullOpts.mkNullable
+            (types.either types.int types.str)
+            "math.floor(40 * (40 / vim.o.lines))"
+            "The documentation window's max height.";
+        };
       };
 
-    # This can be kept as types.attrs since experimental features are often removed or completely changed after a while
-    experimental = mkNullOrOption types.attrs "Experimental features";
+    # This can be kept as types.attrs since experimental features are often removed or completely
+    # changed after a while
+    experimental = helpers.mkNullOrOption types.attrs "Experimental features";
   };
 
   config = let
     options = {
-      enabled = cfg.enable;
-      performance = cfg.performance;
-      preselect =
-        if (isNull cfg.preselect)
+      # The upstream default value (which is a function) should not be overwritten.
+      # https://www.reddit.com/r/neovim/comments/vtw4vl/comment/if9zfdf/?utm_source=share&utm_medium=web2x&context=3
+      enabled =
+        if cfg.enable
         then null
-        else helpers.mkRaw "cmp.PreselectMode.${cfg.preselect}";
+        else false;
+
+      performance = with cfg.performance; {
+        inherit debounce throttle;
+        fetching_timeout = fetchingTimeout;
+        async_budget = asyncBudget;
+        max_view_entries = maxViewEntries;
+      };
+      preselect =
+        helpers.ifNonNull' cfg.preselect
+        (helpers.mkRaw "cmp.PreselectMode.${cfg.preselect}");
 
       # Not very readable sorry
       # If null then null
@@ -350,80 +483,160 @@ in {
       # If an attribute is a module, create a mapping with cmp.mapping() using the action as the first input and the modes as the second.
       mapping = let
         mappings =
-          if (isNull cfg.mapping)
-          then null
-          else
-            mapAttrs
+          helpers.ifNonNull' cfg.mapping
+          (mapAttrs
             (bind: mapping:
               helpers.mkRaw (
                 if isString mapping
                 then mapping
-                else "cmp.mapping(${mapping.action}${optionalString (mapping.modes != null && length mapping.modes >= 1) ("," + (helpers.toLuaObject mapping.modes))})"
+                else let
+                  inherit (mapping) modes;
+                  modesString =
+                    optionalString (modes != null && ((length modes) >= 1))
+                    ("," + (helpers.toLuaObject mapping.modes));
+                in "cmp.mapping(${mapping.action}${modesString})"
               ))
-            cfg.mapping;
+            cfg.mapping);
+
         luaMappings = helpers.toLuaObject mappings;
-        wrapped = lists.fold (presetName: prevString: ''cmp.mapping.preset.${presetName}(${prevString})'') luaMappings cfg.mappingPresets;
+
+        wrapped =
+          lists.fold
+          (
+            presetName: prevString: ''cmp.mapping.preset.${presetName}(${prevString})''
+          )
+          luaMappings
+          cfg.mappingPresets;
       in
         helpers.mkRaw wrapped;
 
-      snippet = {
-        expand =
-          if (isNull cfg.snippet || isNull cfg.snippet.expand)
-          then null
-          else helpers.mkRaw cfg.snippet.expand;
+      snippet = helpers.ifNonNull' cfg.snippet {
+        expand = let
+          inherit (cfg.snippet) expand;
+        in
+          if isString expand
+          then
+            helpers.mkRaw ''
+              function(args)
+                ${snippetEngines.${expand}}
+              end
+            ''
+          else expand;
       };
 
-      completion =
-        if (isNull cfg.completion)
-        then null
-        else {
-          keyword_length = cfg.completion.keyword_length;
-          keyword_pattern = cfg.completion.keyword_pattern;
-          autocomplete =
-            if (isNull cfg.completion.autocomplete)
-            then null
-            else mkRaw cfg.completion.autocomplete;
-          completeopt = cfg.completion.completeopt;
-        };
+      completion = helpers.ifNonNull' cfg.completion {
+        keyword_length = cfg.completion.keywordLength;
+        keyword_pattern = let
+          inherit (cfg.completion) keywordPattern;
+        in
+          helpers.ifNonNull' keywordPattern
+          (helpers.mkRaw "[[${keywordPattern}]]");
+        autocomplete = let
+          inherit (cfg.completion) autocomplete;
+        in
+          if isList autocomplete
+          then
+            map
+            (triggerEvent:
+              helpers.mkRaw "require('cmp.types').cmp.TriggerEvent.${triggerEvent}")
+            autocomplete
+          # either null or false
+          else autocomplete;
+        inherit (cfg.completion) completeopt;
+      };
 
-      confirmation =
-        if (isNull cfg.confirmation)
-        then null
-        else {
-          get_commit_characters =
-            if (isString cfg.confirmation.get_commit_characters)
-            then helpers.mkRaw cfg.confirmation.get_commit_characters
-            else cfg.confirmation.get_commit_characters;
-        };
+      confirmation = helpers.ifNonNull' cfg.confirmation {
+        get_commit_characters =
+          if (isString cfg.confirmation.getCommitCharacters)
+          then helpers.mkRaw cfg.confirmation.getCommitCharacters
+          else cfg.confirmation.getCommitCharacters;
+      };
 
-      formatting =
-        if (isNull cfg.formatting)
-        then null
-        else {
-          fields = cfg.formatting.fields;
-          format =
-            if (isNull cfg.formatting.format)
-            then null
-            else helpers.mkRaw cfg.formatting.format;
-        };
+      formatting = helpers.ifNonNull' cfg.formatting {
+        expandable_indicator = cfg.formatting.expandableIndicator;
+        inherit (cfg.formatting) fields;
+        format =
+          helpers.ifNonNull' cfg.formatting.format
+          (helpers.mkRaw cfg.formatting.format);
+      };
 
-      matching = cfg.matching;
+      matching = helpers.ifNonNull' cfg.matching {
+        disallow_fuzzy_matching = cfg.matching.disallowFuzzyMatching;
+        disallow_fullfuzzy_matching = cfg.matching.disallowFullfuzzyMatching;
+        disallow_partial_fuzzy_matching = cfg.matching.disallowPartialFuzzyMatching;
+        disallow_partial_matching = cfg.matching.disallowPartialMatching;
+        disallow_prefix_unmatching = cfg.matching.disallowPrefixUnmatching;
+      };
 
-      sorting =
-        if (isNull cfg.sorting)
-        then null
-        else {
-          priority_weight = cfg.sorting.priority_weight;
-          comparators =
-            if (isNull cfg.sorting.comparators)
-            then null
-            else helpers.mkRaw cfg.sorting.comparators;
-        };
+      sorting = helpers.ifNonNull' cfg.sorting {
+        priority_weight = cfg.sorting.priorityWeight;
+        comparators = let
+          inherit (cfg.sorting) comparators;
+        in
+          helpers.ifNonNull' comparators
+          (
+            map
+            (
+              funcName:
+                helpers.mkRaw "require('cmp.config.compare').${funcName}"
+            )
+            comparators
+          );
+      };
 
-      sources = cfg.sources;
-      view = cfg.view;
-      window = cfg.window;
-      experimental = cfg.experimental;
+      sources = helpers.ifNonNull' cfg.sources (
+        map
+        (source: {
+          inherit (source) name option;
+          keyword_length = source.keywordLength;
+
+          keywordPattern =
+            helpers.ifNonNull' source.keywordPattern
+            (helpers.mkRaw "[[${source.keywordPattern}]]");
+
+          trigger_characters = source.triggerCharacters;
+
+          inherit (source) priority;
+
+          group_index = source.groupIndex;
+
+          entry_filter = source.entryFilter;
+        })
+        cfg.sources
+      );
+
+      inherit (cfg) view;
+      window = helpers.ifNonNull' cfg.window {
+        completion = with cfg.window.completion;
+          helpers.ifNonNull' cfg.window.completion {
+            inherit
+              border
+              winhighlight
+              zindex
+              scrolloff
+              scrollbar
+              ;
+            col_offset = colOffset;
+            side_padding = sidePadding;
+          };
+        documentation = with cfg.window.documentation;
+          helpers.ifNonNull' cfg.window.documentation {
+            inherit
+              border
+              winhighlight
+              zindex
+              ;
+            max_width =
+              if isInt maxWidth
+              then maxWidth
+              else helpers.ifNonNull' maxWidth (helpers.mkRaw maxWidth);
+            max_height =
+              if isInt maxHeight
+              then maxHeight
+              else helpers.ifNonNull' maxHeight (helpers.mkRaw maxHeight);
+          };
+      };
+      inherit (cfg) experimental;
     };
   in
     mkIf cfg.enable {
@@ -438,7 +651,7 @@ in {
       # and enable the corresponding plugins.
       plugins = let
         flattened_sources =
-          if (isNull cfg.sources)
+          if (cfg.sources == null)
           then []
           else flatten cfg.sources;
         # Take only the names from the sources provided by the user
@@ -454,7 +667,7 @@ in {
           known_source_names);
       in
         mkMerge [
-          (mkIf cfg.auto_enable_sources attrs_enabled)
+          (mkIf cfg.autoEnableSources attrs_enabled)
           (mkIf (elem "nvim_lsp" found_sources)
             {
               lsp.capabilities = ''

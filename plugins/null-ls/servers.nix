@@ -11,6 +11,9 @@
       shellcheck = {
         package = pkgs.shellcheck;
       };
+      statix = {
+        package = pkgs.statix;
+      };
     };
     completion = {};
     diagnostics = {
@@ -26,6 +29,12 @@
       gitlint = {
         package = pkgs.gitlint;
       };
+      deadnix = {
+        package = pkgs.deadnix;
+      };
+      statix = {
+        package = pkgs.statix;
+      };
     };
     formatting = {
       phpcbf = {
@@ -36,6 +45,9 @@
       };
       nixfmt = {
         package = pkgs.nixfmt;
+      };
+      nixpkgs_fmt = {
+        package = pkgs.nixpkgs-fmt;
       };
       prettier = {
         package = pkgs.nodePackages.prettier;
@@ -75,18 +87,19 @@
   serverDataFormatted =
     lib.mapAttrsToList
     (
-      sourceType: sourceSet:
-        lib.mapAttrsToList (name: attrs: attrs // {inherit sourceType name;}) sourceSet
+      sourceType: lib.mapAttrsToList (name: attrs: attrs // {inherit sourceType name;})
     )
     serverData;
   dataFlattened = lib.flatten serverDataFormatted;
 in {
-  imports = lib.lists.map (helpers.mkServer) dataFlattened;
+  imports = lib.lists.map helpers.mkServer dataFlattened;
 
   config = let
     cfg = config.plugins.null-ls;
+    gitsignsEnabled = cfg.sources.code_actions.gitsigns.enable;
   in
     lib.mkIf cfg.enable {
-      plugins.gitsigns.enable = lib.mkIf (cfg.sources.code_actions.gitsigns.enable) true;
+      plugins.gitsigns.enable = lib.mkIf gitsignsEnabled true;
+      extraPackages = lib.optional gitsignsEnabled pkgs.git;
     };
 }
