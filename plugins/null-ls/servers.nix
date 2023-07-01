@@ -61,6 +61,9 @@
       taplo = {
         package = pkgs.taplo;
       };
+      terraform_fmt ={
+        package = pkgs.terraform-ls;
+      };
     };
   };
   # Format the servers to be an array of attrs like the following example
