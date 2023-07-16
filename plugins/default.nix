@@ -9,6 +9,7 @@
     ./colorschemes/nord.nix
     ./colorschemes/one.nix
     ./colorschemes/onedark.nix
+    ./colorschemes/oxocarbon.nix
     ./colorschemes/poimandres.nix
     ./colorschemes/tokyonight.nix
     ./colorschemes/catppuccin.nix
@@ -22,9 +23,11 @@
     ./completion/nvim-cmp/sources
     ./completion/lspkind.nix
 
+    ./filetrees/chadtree.nix
     ./filetrees/neo-tree.nix
     ./filetrees/nvim-tree.nix
 
+    ./git/diffview.nix
     ./git/fugitive.nix
     ./git/gitgutter.nix
     ./git/gitmessenger.nix
@@ -64,6 +67,8 @@
 
     ./null-ls
 
+    ./dap
+
     ./pluginmanagers/packer.nix
 
     ./snippets/luasnip
@@ -89,6 +94,7 @@
     ./utils/floaterm.nix
     ./utils/goyo.nix
     ./utils/harpoon.nix
+    ./utils/illuminate.nix
     ./utils/indent-blankline.nix
     ./utils/intellitab.nix
     ./utils/lastplace.nix
@@ -107,6 +113,7 @@
     ./utils/oil.nix
     ./utils/project-nvim.nix
     ./utils/presence-nvim.nix
+    ./utils/quickmath.nix
     ./utils/specs.nix
     ./utils/spider.nix
     ./utils/startify.nix
@@ -121,6 +128,7 @@
     ./utils/emmet.nix
     ./utils/magma-nvim.nix
     ./utils/which-key.nix
+    ./utils/wilder-nvim.nix
     ./utils/zk.nix
   ];
 }
