@@ -40,6 +40,12 @@ with lib; let
       package = pkgs.cmake-language-server;
     }
     {
+      name = "csharp-ls";
+      description = "Enable csharp-ls, for C#.";
+      package = pkgs.csharp-ls;
+      serverName = "csharp_ls";
+    }
+    {
       name = "cssls";
       description = "Enable cssls, for CSS";
       package = pkgs.vscode-langservers-extracted;
@@ -140,6 +146,11 @@ with lib; let
       name = "denols";
       description = "Enable denols, for Deno";
       package = pkgs.deno;
+    }
+    {
+      name = "elmls";
+      description = "Enable elmls, for Elm.";
+      package = pkgs.elmPackages.elm-language-server;
     }
     {
       name = "eslint";
@@ -246,7 +257,12 @@ with lib; let
         };
         workspace = {
           library = mkOption {
-            type = types.nullOr (types.either types.str helpers.rawType);
+            type = with types;
+              nullOr
+              (
+                listOf
+                (either str helpers.rawType)
+              );
             description = ''
               An array of abosolute or workspace-relative paths that will be added to the workspace
               diagnosis - meaning you will get completion and context from these library files.
@@ -254,7 +270,7 @@ with lib; let
               Files included here will have some features disabled such as renaming fields to
               prevent accidentally renaming your library files.
             '';
-            default = helpers.mkRaw "vim.api.nvim_get_runtime_file('', true)";
+            default = [(helpers.mkRaw "vim.api.nvim_get_runtime_file('', true)")];
           };
           checkThirdParty = mkOption {
             type = types.nullOr types.bool;
