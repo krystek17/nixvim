@@ -32,7 +32,7 @@ in {
       {environment.systemPackages = [cfg.finalPackage];}
       (mkIf (!cfg.wrapRc) {
         environment.etc = files;
-        environment.variables."VIM" = "/etc/nvim";
+        #environment.variables."VIM" = "/etc/nvim";
       })
       {
         inherit (cfg) warnings assertions;
