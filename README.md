@@ -1,3 +1,12 @@
+<h2 align="center">
+  <picture>
+    <img src="assets/nixvim_logo.png" />
+  </picture>
+
+  <a href="https://nix-community.github.io/nixvim">Documentation</a> |
+  <a href="https://matrix.to/#/#nixvim:matrix.org">Chat</a>
+</h2>
+
 # NixVim - A Neovim configuration system for nix
 ## What is it?
 NixVim is a [Neovim](https://neovim.io) distribution built around
@@ -27,10 +36,11 @@ If you have any question, please use the [discussions page](https://github.com/n
 
 ## Installation
 
-NixVim needs to be installed with a compatible nixpkgs version.
-This means that the `main` branch of NixVim requires to be installed with `nixos-unstable`.
-
-If you want to use NixVim with nixpkgs 23.05 you should use the `nixos-23.05` branch.
+**WARNING !**
+> NixVim needs to be installed with a compatible nixpkgs version.
+> This means that the `main` branch of NixVim requires to be installed with `nixos-unstable`.
+>
+> If you want to use NixVim with nixpkgs 23.05 you should use the `nixos-23.05` branch.
 
 ### Without flakes
 NixVim now ships with `flake-compat`, which makes it usable from any system.
@@ -42,6 +52,8 @@ To install it, edit your home-manager (or NixOS) configuration:
 let
   nixvim = import (builtins.fetchGit {
     url = "https://github.com/nix-community/nixvim";
+    # If you are not running an unstable channel of nixpkgs, select the corresponding branch of nixvim.
+    # ref = "nixos-23.05";
   });
 in
 {
@@ -79,7 +91,13 @@ flakes, just add the nixvim input:
 ```nix
 {
   # ...
-  inputs.nixvim.url = "github:nix-community/nixvim";
+  inputs.nixvim = {
+    url = "github:nix-community/nixvim";
+    # If you are not running an unstable channel of nixpkgs, select the corresponding branch of nixvim.
+    # url = "github:nix-community/nixvim/nixos-23.05";
+
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 }
 ```
 

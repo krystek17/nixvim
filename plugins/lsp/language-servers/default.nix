@@ -148,6 +148,17 @@ with lib; let
       package = pkgs.deno;
     }
     {
+      name = "digestif";
+      description = "Enable digestif, for LaTeX";
+      # luaPackages.digestif is currently broken, using lua54Packages instead
+      package = pkgs.lua54Packages.digestif;
+    }
+    {
+      name = "efm";
+      description = "Enable efm-langserver, for misc tools";
+      package = pkgs.efm-langserver;
+    }
+    {
       name = "elmls";
       description = "Enable elmls, for Elm.";
       package = pkgs.elmPackages.elm-language-server;
@@ -190,6 +201,11 @@ with lib; let
       description = "Enable html, for HTML";
       package = pkgs.vscode-langservers-extracted;
       cmd = cfg: ["${cfg.package}/bin/vscode-html-language-server" "--stdio"];
+    }
+    {
+      name = "intelephense";
+      description = "Enable intelephense, for PHP";
+      package = pkgs.nodePackages.intelephense;
     }
     {
       name = "java-language-server";
@@ -335,46 +351,59 @@ with lib; let
       description = "Enable nixd, for Nix";
       package = pkgs.nixd;
       settings = cfg: {nixd = cfg;};
+    }
+    {
+      name = "omnisharp";
+      description = "Enable omnisharp language server, for C#";
+      package = pkgs.omnisharp-roslyn;
+      cmd = cfg: ["${cfg.package}/bin/OmniSharp"];
+      settings = cfg: {omnisharp = cfg;};
       settingsOptions = {
-        # The evaluation section, provide auto completion for dynamic bindings.
-        eval = {
-          target = {
-            args = helpers.defaultNullOpts.mkNullable (with types; listOf str) "[]" ''
-              Accept args as "nix eval".
-            '';
+        enableEditorConfigSupport = helpers.defaultNullOpts.mkBool true ''
+          Enables support for reading code style, naming convention and analyzer settings from
+          `.editorconfig`.
+        '';
 
-            installable = helpers.defaultNullOpts.mkStr "" ''
-              "nix eval"
-            '';
-          };
+        enableMsBuildLoadProjectsOnDemand = helpers.defaultNullOpts.mkBool false ''
+          If true, MSBuild project system will only load projects for files that were opened in the
+          editor.
+          This setting is useful for big C# codebases and allows for faster initialization of code
+          navigation features only for projects that are relevant to code that is being edited.
+          With this setting enabled OmniSharp may load fewer projects and may thus display
+          incomplete reference lists for symbols.
+        '';
 
-          depth = helpers.defaultNullOpts.mkInt 0 "Extra depth for evaluation";
+        enableRoslynAnalyzers = helpers.defaultNullOpts.mkBool false ''
+          If true, MSBuild project system will only load projects for files that were opened in the
+          editor.
+          This setting is useful for big C# codebases and allows for faster initialization of code
+          navigation features only for projects that are relevant to code that is being edited.
+          With this setting enabled OmniSharp may load fewer projects and may thus display
+          incomplete reference lists for symbols.
+        '';
 
-          workers = helpers.defaultNullOpts.mkInt 3 "The number of workers for evaluation task.";
-        };
+        organizeImportsOnFormat = helpers.defaultNullOpts.mkBool false ''
+          Specifies whether 'using' directives should be grouped and sorted during document
+          formatting.
+        '';
 
-        formatting = {
-          command = helpers.defaultNullOpts.mkStr "nixpkgs-fmt" ''
-            Which command you would like to do formatting
-          '';
-        };
+        enableImportCompletion = helpers.defaultNullOpts.mkBool false ''
+          Enables support for showing unimported types and unimported extension methods in
+          completion lists.
+          When committed, the appropriate using directive will be added at the top of the current
+          file.
+          This option can have a negative impact on initial completion responsiveness, particularly
+          for the first few completion sessions after opening a solution.
+        '';
 
-        options = {
-          enable = helpers.defaultNullOpts.mkBool true ''
-            Enable option completion task.
-            If you are writting a package, disable this
-          '';
+        sdkIncludePrereleases = helpers.defaultNullOpts.mkBool true ''
+          Specifies whether to include preview versions of the .NET SDK when determining which
+          version to use for project loading.
+        '';
 
-          target = {
-            args = helpers.defaultNullOpts.mkNullable (with types; listOf str) "[]" ''
-              Accept args as "nix eval".
-            '';
-
-            installable = helpers.defaultNullOpts.mkStr "" ''
-              "nix eval"
-            '';
-          };
-        };
+        analyzeOpenDocumentsOnly = helpers.defaultNullOpts.mkBool true ''
+          Only run analyzers against open files when 'enableRoslynAnalyzers' is true.
+        '';
       };
     }
     {
@@ -403,7 +432,7 @@ with lib; let
       description = "Enable rust-analyzer, for Rust.";
       serverName = "rust_analyzer";
 
-      settingsOptions = import ./rust-analyzer-config.nix lib;
+      settingsOptions = import ./rust-analyzer-config.nix lib pkgs;
       settings = cfg: {rust-analyzer = cfg;};
     }
     {
@@ -412,9 +441,19 @@ with lib; let
       package = pkgs.sourcekit-lsp;
     }
     {
+      name = "svelte";
+      description = "Enable the svelte language server, for Svelte";
+      package = pkgs.nodePackages.svelte-language-server;
+    }
+    {
       name = "tailwindcss";
       description = "Enable tailwindcss language server, for tailwindcss";
       package = pkgs.nodePackages."@tailwindcss/language-server";
+    }
+    {
+      name = "taplo";
+      description = "Enable taplo, for TOML";
+      package = pkgs.taplo;
     }
     {
       name = "terraformls";
@@ -442,6 +481,11 @@ with lib; let
       package = pkgs.nodePackages.vls;
     }
     {
+      name = "volar";
+      description = "Enable @volar/vue-language-server, for Vue";
+      package = pkgs.nodePackages."@volar/vue-language-server";
+    }
+    {
       name = "yamlls";
       description = "Enable yamlls, for yaml";
       package = pkgs.yaml-language-server;
@@ -456,6 +500,9 @@ in {
     lib.lists.map lspHelpers.mkLsp servers
     ++ [
       ./ccls.nix
+      ./efmls-configs.nix
+      ./nixd.nix
       ./pylsp.nix
+      ./svelte.nix
     ];
 }

@@ -33,12 +33,13 @@ To add a new plugin you need to do the following.
 
     ```nix
     {
-     lib,
-     pkgs,
-     ...
+      lib,
+      pkgs,
+      ...
     } @ args:
+
     let
-     helpers = import ../helpers.nix args;
+      helpers = import ../helpers.nix args;
     in {
     }
     ```
@@ -52,12 +53,16 @@ To add a new plugin you need to do the following.
 
     ```nix
     {
-        config = let cfg = config.plugins."<plug-name>"; in lib.mkIf cfg.enable {
-            extraPlugins = [cfg.package];
+      config =
+        let
+          cfg = config.plugins."<plug-name>";
 
-            extraConfigLua = ''
-                <plugin configuration if needed>
-            '';
+        in lib.mkIf cfg.enable {
+          extraPlugins = [cfg.package];
+
+          extraConfigLua = ''
+            <plugin configuration if needed>
+          '';
         };
     }
     ```
@@ -103,4 +108,6 @@ The tests are then runnable with `nix flake check`.
 
 There are a second set of tests, unit tests for nixvim itself, defined in `tests/lib-tests.nix` that use the `pkgs.lib.runTests` framework.
 
-If you want to speed up tests, we have set up a Cachix for nixvim. This way, only tests whose dependencies have changed will be re-run, speeding things up considerably. To use it, just install cachix and run `cachix use nixvim`.
+If you want to speed up tests, we have set up a Cachix for nixvim.
+This way, only tests whose dependencies have changed will be re-run, speeding things up
+considerably. To use it, just install cachix and run `cachix use nix-community`.

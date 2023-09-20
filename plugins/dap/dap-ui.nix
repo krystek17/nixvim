@@ -122,7 +122,7 @@ in {
       layouts =
         helpers.defaultNullOpts.mkNullable (types.listOf layoutOption)
         ''
-          ```
+          ```nix
             [
               {
                 elements = [
@@ -219,10 +219,12 @@ in {
     mkIf cfg.enable {
       extraPlugins = [cfg.package];
 
-      plugins.dap.enable = true;
+      plugins.dap = {
+        enable = true;
 
-      extraConfigLua = ''
-        require("dapui").setup(${helpers.toLuaObject options});
-      '';
+        extensionConfigLua = ''
+          require("dapui").setup(${helpers.toLuaObject options});
+        '';
+      };
     };
 }

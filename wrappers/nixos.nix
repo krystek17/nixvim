@@ -4,7 +4,7 @@ modules: {
   lib,
   ...
 } @ args: let
-  inherit (lib) mkEnableOption mkOption mkOptionType mkMerge mkIf types;
+  inherit (lib) mkEnableOption mkOption mkOptionType mkForce mkMerge mkIf types;
   shared = import ./_shared.nix modules args;
   cfg = config.programs.nixvim;
   files =
@@ -18,7 +18,11 @@ in {
       default = {};
       type = types.submodule ([
           {
-            options.enable = mkEnableOption "nixvim";
+            options = {
+              enable = mkEnableOption "nixvim";
+              defaultEditor = mkEnableOption "Set nixvim as the default editor";
+            };
+            config.wrapRc = mkForce true;
           }
         ]
         ++ shared.topLevelModules);
@@ -36,6 +40,8 @@ in {
       })
       {
         inherit (cfg) warnings assertions;
+        programs.neovim.defaultEditor = cfg.defaultEditor;
+        environment.variables.EDITOR = mkIf cfg.defaultEditor (lib.mkOverride 900 "nvim");
       }
     ]);
 }

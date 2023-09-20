@@ -21,6 +21,8 @@ with lib; rec {
             (n: v:
               if head (stringToCharacters n) == "@"
               then toLuaObject v
+              else if n == "__emptyString"
+              then "[''] = " + (toLuaObject v)
               else "[${toLuaObject n}] = " + (toLuaObject v))
             (filterAttrs
               (
@@ -48,6 +50,39 @@ with lib; rec {
     else "";
 
   emptyTable = {"__empty" = null;};
+
+  highlightType = with lib.types;
+    submodule {
+      # Adds flexibility for other keys
+      freeformType = types.attrs;
+
+      # :help nvim_set_hl()
+      options = {
+        fg = mkNullOrOption str "Color for the foreground (color name or '#RRGGBB').";
+        bg = mkNullOrOption str "Color for the background (color name or '#RRGGBB').";
+        sp = mkNullOrOption str "Special color (color name or '#RRGGBB').";
+        blend = mkNullOrOption (numbers.between 0 100) "Integer between 0 and 100.";
+        bold = mkNullOrOption bool "";
+        standout = mkNullOrOption bool "";
+        underline = mkNullOrOption bool "";
+        undercurl = mkNullOrOption bool "";
+        underdouble = mkNullOrOption bool "";
+        underdotted = mkNullOrOption bool "";
+        underdashed = mkNullOrOption bool "";
+        strikethrough = mkNullOrOption bool "";
+        italic = mkNullOrOption bool "";
+        reverse = mkNullOrOption bool "";
+        nocombine = mkNullOrOption bool "";
+        link = mkNullOrOption str "Name of another highlight group to link to.";
+        default = mkNullOrOption bool "Don't override existing definition.";
+        ctermfg = mkNullOrOption str "Sets foreground of cterm color.";
+        ctermbg = mkNullOrOption str "Sets background of cterm color.";
+        cterm = mkNullOrOption attrs ''
+          cterm attribute map, like |highlight-args|.
+          If not set, cterm attributes will match those from the attribute map documented above.
+        '';
+      };
+    };
 
   # Given an attrs of key mappings (for a single mode), applies the defaults to each one of them.
   #
@@ -112,8 +147,6 @@ with lib; rec {
     then null
     else y;
 
-  ifNonNull = x: ifNonNull' x x;
-
   mkCompositeOption = desc: options:
     mkNullOrOption (types.submodule {inherit options;}) desc;
 
@@ -134,6 +167,10 @@ with lib; rec {
 
     mkNum = default: mkNullable lib.types.number (toString default);
     mkInt = default: mkNullable lib.types.int (toString default);
+    # Positive: >0
+    mkPositiveInt = default: mkNullable lib.types.ints.positive (toString default);
+    # Unsigned: >=0
+    mkUnsignedInt = default: mkNullable lib.types.ints.unsigned (toString default);
     mkBool = default:
       mkNullable lib.types.bool (
         if default
@@ -167,6 +204,16 @@ with lib; rec {
           ${desc}
           ${defaultDesc}
         '');
+
+    mkHighlight = default: name: desc:
+      mkNullable
+      highlightType
+      default
+      (
+        if desc == ""
+        then "Highlight settings."
+        else desc
+      );
   };
 
   mkPackageOption = name: default:
@@ -271,14 +318,12 @@ with lib; rec {
     end
   '';
 
-  rawType = types.submodule {
-    options = {
-      __raw = mkOption {
-        type = types.str;
-        description = "raw lua code";
-        default = "";
-      };
-    };
+  rawType = mkOptionType {
+    name = "rawType";
+    description = "raw lua code";
+    descriptionClass = "noun";
+    merge = mergeEqualOption;
+    check = isRawType;
   };
 
   isRawType = v: lib.isAttrs v && lib.hasAttr "__raw" v && lib.isString v.__raw;

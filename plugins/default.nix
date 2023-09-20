@@ -3,7 +3,9 @@
     ./bufferlines/barbar.nix
     ./bufferlines/bufferline.nix
 
+    ./colorschemes/ayu.nix
     ./colorschemes/base16.nix
+    ./colorschemes/dracula.nix
     ./colorschemes/gruvbox.nix
     ./colorschemes/kanagawa.nix
     ./colorschemes/nord.nix
@@ -29,6 +31,7 @@
 
     ./git/diffview.nix
     ./git/fugitive.nix
+    ./git/gitblame.nix
     ./git/gitgutter.nix
     ./git/gitmessenger.nix
     ./git/gitsigns.nix
@@ -45,10 +48,10 @@
     ./languages/rust.nix
     ./languages/sniprun.nix
     ./languages/tagbar.nix
+    ./languages/treesitter/rainbow-delimiters.nix
     ./languages/treesitter/treesitter.nix
     ./languages/treesitter/treesitter-context.nix
     ./languages/treesitter/treesitter-playground.nix
-    ./languages/treesitter/treesitter-rainbow.nix
     ./languages/treesitter/treesitter-refactor.nix
     ./languages/treesitter/ts-autotag.nix
     ./languages/treesitter/ts-context-commentstring.nix
@@ -58,6 +61,7 @@
     ./languages/zig.nix
 
     ./lsp
+    ./lsp/fidget.nix
     ./lsp/inc-rename.nix
     ./lsp/lspsaga.nix
     ./lsp/lsp-format.nix
@@ -93,14 +97,18 @@
     ./utils/endwise.nix
     ./utils/floaterm.nix
     ./utils/goyo.nix
+    ./utils/hardtime.nix
     ./utils/harpoon.nix
     ./utils/illuminate.nix
     ./utils/indent-blankline.nix
+    ./utils/instant.nix
     ./utils/intellitab.nix
     ./utils/lastplace.nix
     ./utils/leap.nix
     ./utils/mark-radar.nix
     ./utils/mini.nix
+    ./utils/mkdnflow.nix
+    ./utils/multicursors.nix
     ./utils/neorg.nix
     ./utils/neogen.nix
     ./utils/notify.nix

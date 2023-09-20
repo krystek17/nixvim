@@ -906,7 +906,7 @@ in {
             update_root = updateRoot;
             ignore_list = ignoreList;
           };
-        system_open = helpers.ifNonNull systemOpen;
+        system_open = systemOpen;
         diagnostics = with diagnostics;
           ifNonNull' cfg.diagnostics {
             inherit enable;
@@ -1136,8 +1136,7 @@ in {
       ];
 
       autoCmd =
-        []
-        ++ (optional autoOpenEnabled {
+        (optional autoOpenEnabled {
           event = "VimEnter";
           callback = helpers.mkRaw "open_nvim_tree";
         })
